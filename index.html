@@ -335,6 +335,7 @@
                 let changesColumn = $("<td/>", { class: "text-center" }).html('').appendTo(row);
                 $.each(result.propertyChanges, (j, propertyChange) => {
                     let changes = '';
+
                     if ((propertyChange.oldValues.length === 1 && propertyChange.oldValues[0].length === 0) && (propertyChange.newValues.length === 1 && propertyChange.newValues[0].length === 0)) {
                         changes = ' (no changes)';
                     } else {
