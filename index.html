@@ -57,14 +57,13 @@
                         <table class="table table-bordered" width="100%" cellspacing="0">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>User</th>
-                                    <th>Client</th>
-                                    <th>Remote IP</th>
-                                    <th>Action</th>
-                                    <th>Entity Type</th>
-                                    <th>Entity</th>
-                                    <th>Changes</th>
+                                    <th class="text-center">Date</th>
+                                    <th class="text-center">User</th class="text-center">
+                                    <th class="text-center">Client</th class="text-center">
+                                    <th class="text-center">Remote IP</th class="text-center">
+                                    <th class="text-center">Action</th class="text-center">
+                                    <th class="text-center">Entity</th class="text-center">
+                                    <th class="text-center">Changes</th class="text-center">
                                 </tr>
                             </thead>
                             <tbody id="resultsBody">
@@ -151,287 +150,35 @@
 
     <script>
 
+        //TODO Use another table to allow sorting, filtering, etc. and filter by date by default
+        //TODO Add support for Create and Read actions
+        //TODO Add multiple accordion sections per serviceName
+        //TODO Handle 429
+        //TODO What is cursor in get audit results API?
+        //TODO Getting 404 for TopicsDefinitionsService?
+        //TODO Fix username and queue name caching
+
         const clientId = '1db38a1e-2398-4435-91f6-d51493e17e23';
-        console.log('Redirect uri:', window.location.href);
-        const redirectUri = window.location.href;
-        const environment = 'mypurecloud.ie';
+        const redirectUri = `${window.location.origin}${window.location.pathname}`;
         const state = '';
 
         const platformClient = require('platformClient');
         const client = platformClient.ApiClient.instance;
-        client.setEnvironment('mypurecloud.ie');
 
         var queue = new TimerQueue(), users = [], queues = [];
 
-        client.loginImplicitGrant(clientId, redirectUri, { state: state })
-            .then((data) => {
-                console.log(data);
-                showMessage('Connected', 'Click on Query to get started...');
-            })
-            .catch((err) => {
-                console.error(err);
-                showErrorMessage('Error', err);
-            });
+        let stateData = getHashParameter('state');
+        console.log('State:', stateData);
+        if (stateData) {
+            // State string has been encode twice
+            stateData = decodeURIComponent(stateData);
+            stateData = decodeURIComponent(stateData);
+            stateData = JSON.parse(stateData);
+            console.log('Parsed state params:', stateData);
 
-        //#region Query
-
-        $("#getData").on("click", async (e) => {
-            e.preventDefault();
-
-            try {
-                console.log('Getting data...');
-
-                let startDate = $("#queryModal #startDatePicker").val();
-                let endDate = $("#queryModal #endDatePicker").val();
-                let environment = $("#queryModal #environment").val();
-
-                if (!startDate || !endDate || !environment) {
-                    alert('Invalid or missing parameters');
-                    return;
-                }
-
-                // Start/End date validation
-                if (new Date(startDate) >= new Date(endDate)) {
-                    alert('Make sure the start date is before the end date');
-                    return;
-                }
-
-                // Close the modal
-                $('#queryModal').modal('toggle');
-
-                // Update date fields
-                var d = new Date(startDate);
-                var startDateString = ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "-" + d.getFullYear();
-                $(".startDate").text(startDateString);
-                var d = new Date(endDate);
-                var endDateString = ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "-" + d.getFullYear();
-                $(".endDate").text(endDateString);
-
-                // Let's go!
-                resetValues();
-                showSpinner();
-                $("#spinner-text").text("Loading... Please Wait...");
-
-                var dateRanges = getDates(new Date(startDate), new Date(endDate));
-                $.each(dateRanges, async (i, dateRange) => {
-                    console.log(`Current date range: ${dateRange.startDate} to ${dateRange.endDate}`);
-                    try {
-                        let transaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment);
-                        queue.addTask(() => getTransactionState(transaction.id), 1000);
-                    } catch (error) {
-                        showErrorMessage(`Error for dates ${dateRange.startDate} to ${dateRange.endDate}:`, error);
-                    }
-                });
-
-                await until(() => {
-                    return queue.tasks.length === 0;
-                });
-            } catch (error) {
-                console.error(error);
-                showErrorMessage(error.message);
-            }
-
-        });
-
-        async function createAuditQuery(startDate, endDate, environment) {
-
-            return new Promise((resolve, reject) => {
-                let apiInstance = new platformClient.AuditApi();
-
-                let body = {
-                    interval: `${startDate}/${endDate}`,
-                    serviceName: 'ContactCenter'
-                };
-
-                apiInstance.postAuditsQuery(body)
-                    .then(async (data) => {
-                        console.log('postAuditsQuery success! data:', data);
-                        resolve(data);
-                    })
-                    .catch((err) => {
-                        console.log('There was a failure calling postAuditsQuery');
-                        console.error(err);
-                        reject(err);
-                    });
-            });
+            client.setAccessToken(getHashParameter('access_token'));
+            processRequest(stateData.startDate, stateData.endDate, stateData.environment);
         }
-
-        async function getTransactionState(transactionId) {
-            console.log('Get transaction state:', transactionId);
-            return new Promise((resolve, reject) => {
-                let apiInstance = new platformClient.AuditApi();
-
-                apiInstance.getAuditsQueryTransactionId(transactionId)
-                    .then((data) => {
-                        console.log('getAuditsQueryTransactionId success! data:', data);
-                        if (data.state === 'Succeeded') {
-                            getTransactionResults(transactionId);
-                            resolve();
-                            return;
-                        }
-                        reject(data.state);
-                    })
-                    .catch((err) => {
-                        console.log('There was a failure calling getAuditsQueryTransactionId');
-                        console.error(err);
-                        reject();
-                    });
-            });
-        }
-
-        async function getTransactionResults(transactionId) {
-            let apiInstance = new platformClient.AuditApi();
-
-            let opts = {
-                //'cursor': "",
-                'pageSize': 100
-            };
-
-            apiInstance.getAuditsQueryTransactionIdResults(transactionId, opts)
-                .then((data) => {
-                    console.log('getAuditsQueryTransactionIdResults success! data:', data);
-                    showResults(data);
-                })
-                .catch((err) => {
-                    console.log('There was a failure calling getAuditsQueryTransactionIdResults');
-                    console.error(err);
-                });
-        }
-
-        async function showResults(transactionResults) {
-            console.log('Showing results:', transactionResults);
-            hideSpinner();
-
-            $.each(transactionResults.entities, async (i, result) => {
-                console.log('Adding audit entry:', result);
-                let row = $("<tr/>").appendTo("#resultsBody");
-                $("<td/>", { class: "text-center" }).html(result.eventDate).appendTo(row); // Date
-
-                // User
-                let username = '(none)';
-                try {
-                    username = await getUsername(result.user.id)
-                } catch (error) {
-                }
-                $("<td/>", { class: "text-center" }).html(username).appendTo(row); // User
-
-                $("<td/>", { class: "text-center" }).html(result.client.id).appendTo(row); // Client
-                $("<td/>", { class: "text-center" }).html(result.remoteIp.join('<br/>')).appendTo(row); // Remote IP
-                $("<td/>", { class: "text-center" }).html(result.action).appendTo(row); // Action
-
-                // Entity
-                $("<td/>", { class: "text-center" }).html(result.entityType).appendTo(row); // Entity Type'
-                if (result.entityType === 'Queue') {
-                    let queue = '(none)';
-                    try {
-                        queue = await getQueueName(result.entity.id)
-                    } catch (error) {
-                    }
-                    $("<td/>", { class: "text-center" }).html(queue).appendTo(row);
-                } else {
-                    $("<td/>", { class: "text-center" }).html(result.entity.id).appendTo(row);
-                }
-
-                // Changes
-                let changesColumn = $("<td/>", { class: "text-center" }).html('').appendTo(row);
-                $.each(result.propertyChanges, (j, propertyChange) => {
-                    let changes = '';
-
-                    if ((propertyChange.oldValues.length === 1 && propertyChange.oldValues[0].length === 0) && (propertyChange.newValues.length === 1 && propertyChange.newValues[0].length === 0)) {
-                        changes = ' (no changes)';
-                    } else {
-                        let oldValues = propertyChange.oldValues;
-                        let oldValueText = '';
-                        if (oldValues.length === 1 && oldValues[0].length === 0) {
-                            oldValueText = '(empty)';
-                        } else {
-                            oldValueText = oldValues;
-                        }
-
-                        let newValues = propertyChange.newValues;
-                        let newValueText = '';
-                        if (newValues.length === 1 && newValues[0].length === 0) {
-                            newValueText = '(empty)';
-                        } else {
-                            newValueText = newValues;
-                        }
-
-                        changes = oldValueText + ' <i class="fas fa-arrow-right"></i> ' + newValueText;
-                    }
-                    changesColumn.append((changesColumn.text().length > 0 ? '<br/>' : '') + propertyChange.property.split(':').pop() + ': ' + changes);
-                });
-            });
-        }
-
-        async function getUsername(userId) {
-            return new Promise((resolve, reject) => {
-                if (!userId) {
-                    resolve("(none)");
-                }
-
-                // This does not work as all calls happen too fast?
-                if (users[userId] !== undefined) {
-                    resolve(users[userId]);
-                }
-
-                let apiInstance = new platformClient.UsersApi();
-
-                apiInstance.getUser(userId, null)
-                    .then((data) => {
-                        users[userId] = data.name; // Save username to avoid calling the Users API too many times
-                        resolve(data.name);
-                    })
-                    .catch((err) => {
-                        console.log('There was a failure calling getUser');
-                        console.error(err);
-                        showErrorMessage('Error', err);
-                        resolve('(error)');
-                    });
-            });
-        }
-
-        async function getQueueName(queueId) {
-            return new Promise((resolve, reject) => {
-                if (!queueId) {
-                    resolve("(none)");
-                }
-
-                // This does not work as all calls happen too fast?
-                if (queues[queueId] !== undefined) {
-                    resolve(queues[queueId]);
-                }
-
-                let apiInstance = new platformClient.RoutingApi();
-
-                apiInstance.getRoutingQueue(queueId)
-                    .then((data) => {
-                        //console.log(`getRoutingQueue success! data: ${JSON.stringify(data, null, 2)}`);
-                        queues[queueId] = data.name;
-                        resolve(data.name);
-                    })
-                    .catch((err) => {
-                        console.log('There was a failure calling getRoutingQueue');
-                        console.error(err);
-                        resolve('(error)');
-                    });
-            });
-        }
-
-        //#endregion
-
-        //#region Spinner
-
-        function showSpinner() {
-            $("#fadeMe").addClass("fadeMe");
-            $("#fadeMe").show();
-        }
-
-        function hideSpinner(div) {
-            $("#fadeMe").removeClass("fadeMe");
-            $("#fadeMe").hide();
-        }
-
-        //#endregion
 
         //#region Date Pickers & Date Functions
 
@@ -449,8 +196,8 @@
             weekStart: 1          // weeks start on Mondays
         });
 
-        Date.prototype.addDays = function (days) {
-            var date = new Date(this.valueOf());
+        function addDays(date, days) {
+            var date = new Date(date);
             date.setDate(date.getDate() + days);
             return date;
         }
@@ -461,7 +208,7 @@
             while (currentDate < stopDate) {
                 var dateRange = {};
                 dateRange.startDate = new Date(currentDate).toISOString();
-                currentDate = currentDate.addDays(7);
+                currentDate = addDays(currentDate, 7);
                 if (currentDate > stopDate) {
                     currentDate = stopDate;
                 }
@@ -516,7 +263,7 @@
                 try {
                     await nextTask.callback();
                 } catch (error) {
-                    console.warn(`${nextTask.callback}: ${error}`);
+                    console.log(`Need to try ${nextTask.callback} again: ${error}`);
                     self.addTask(() => nextTask.callback(), 1000);
                 }
                 console.log('End of call for next task:', nextTask);
@@ -565,7 +312,423 @@
 
         //#endregion
 
+        //#region Query
+
+        $("#getData").on("click", async (e) => {
+            e.preventDefault();
+
+            let startDate = $("#queryModal #startDatePicker").val();
+            let endDate = $("#queryModal #endDatePicker").val();
+            let environment = $("#queryModal #environment").val();
+
+            console.log('Logging in to Genesys Cloud...', startDate);
+            try {
+                await login({
+                    startDate: startDate,
+                    endDate: endDate,
+                    environment: environment
+                });
+            } catch (error) {
+                showErrorMessage('Error', error.message);
+            }
+        });
+
+        async function processRequest(startDate, endDate, environment) {
+            try {
+                console.log('Getting data...', startDate, endDate, environment);
+
+                client.setEnvironment(environment);
+
+                if (!startDate || !endDate || !environment) {
+                    alert('Invalid or missing parameters');
+                    return;
+                }
+
+                // Start/End date validation
+                if (new Date(startDate) >= new Date(endDate)) {
+                    alert('Make sure the start date is before the end date');
+                    return;
+                }
+
+                // Close the modal
+                $('#queryModal').modal('hide');
+
+                // Update date fields
+                var d = new Date(startDate);
+                var startDateString = ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "-" + d.getFullYear();
+                $(".startDate").text(startDateString);
+                var d = new Date(endDate);
+                var endDateString = ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "-" + d.getFullYear();
+                $(".endDate").text(endDateString);
+
+                // Let's go!
+                resetValues();
+                showSpinner();
+                $("#spinner-text").text("Loading... Please Wait...");
+
+                var dateRanges = getDates(new Date(startDate), new Date(endDate));
+                $.each(dateRanges, async (i, dateRange) => {
+                    console.log(`Current date range: ${dateRange.startDate} to ${dateRange.endDate}`);
+                    try {
+                        let contactCenterTransaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment, 'ContactCenter');
+                        queue.addTask(() => getTransactionState(contactCenterTransaction.id), 1000);
+                        let contentManagementTransaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment, 'ContentManagement');
+                        queue.addTask(() => getTransactionState(contentManagementTransaction.id), 1000);
+                        let peoplePermissionsTransaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment, 'PeoplePermissions');
+                        queue.addTask(() => getTransactionState(peoplePermissionsTransaction.id), 1000);
+                        let qualityTransaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment, 'Quality');
+                        queue.addTask(() => getTransactionState(qualityTransaction.id), 1000);
+                        let languageUnderstandingTransaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment, 'LanguageUnderstanding');
+                        queue.addTask(() => getTransactionState(languageUnderstandingTransaction.id), 1000);
+                        //let topicsDefinitionsServiceTransaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment, 'TopicsDefinitionsService');
+                        //queue.addTask(() => getTransactionState(topicsDefinitionsServiceTransaction.id), 1000);
+                    } catch (error) {
+                        showErrorMessage(`Error for dates ${dateRange.startDate} to ${dateRange.endDate}:`, error.body.message);
+                    }
+                });
+
+                await until(() => {
+                    return queue.tasks.length === 0;
+                });
+            } catch (error) {
+                console.error(error);
+                showErrorMessage(error.message);
+            }
+        }
+
+        function login(stateData) {
+            return new Promise((resolve, reject) => {
+                client.setEnvironment(stateData.environment);
+                client.loginImplicitGrant(clientId, redirectUri, { state: stateData ? JSON.stringify(stateData) : null })
+                    .then((data) => {
+                        console.log(data);
+                        if (data.state) {
+                            processRequest(stateData.startDate, stateData.endDate, stateData.environment);
+                        }
+                        resolve(data);
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                        reject(err);
+                    });
+            });
+        }
+
+        async function createAuditQuery(startDate, endDate, environment, serviceName) {
+
+            return new Promise((resolve, reject) => {
+                let apiInstance = new platformClient.AuditApi();
+
+                let body = {
+                    interval: `${startDate}/${endDate}`,
+                    serviceName: serviceName
+                };
+
+                apiInstance.postAuditsQuery(body)
+                    .then(async (data) => {
+                        console.warn(serviceName + ' postAuditsQuery success! data:', data);
+                        resolve(data);
+                    })
+                    .catch((err) => {
+                        if (err.status === 429) {
+                            console.warn('Got 429 (too many requests)');
+                            setTimeout(() => queue.addTask(() => createAuditQuery(startDate, endDate, environment), queue.getNextDelay()), 0);
+                            resolve();
+                            return;
+                        }
+                        console.log('There was a failure calling postAuditsQuery');
+                        console.error(err);
+                        reject(err);
+                    });
+            });
+        }
+
+        async function getTransactionState(transactionId) {
+            console.log('Get transaction state:', transactionId);
+            return new Promise((resolve, reject) => {
+                let apiInstance = new platformClient.AuditApi();
+
+                apiInstance.getAuditsQueryTransactionId(transactionId)
+                    .then((data) => {
+                        console.log('getAuditsQueryTransactionId success! data:', data);
+                        if (data.state === 'Succeeded') {
+                            getTransactionResults(transactionId);
+                            resolve();
+                            return;
+                        }
+                        reject(data.state);
+                    })
+                    .catch((err) => {
+                        if (err.status === 429) {
+                            console.warn('Got 429 (too many requests)');
+                            setTimeout(() => queue.addTask(() => getTransactionState(transactionId), queue.getNextDelay()), 0);
+                            resolve();
+                            return;
+                        }
+                        console.log('There was a failure calling getAuditsQueryTransactionId');
+                        console.error(err);
+                        reject();
+                    });
+            });
+        }
+
+        async function getTransactionResults(transactionId) {
+            let apiInstance = new platformClient.AuditApi();
+
+            let opts = {
+                //'cursor': "",
+                'pageSize': 100
+            };
+
+            apiInstance.getAuditsQueryTransactionIdResults(transactionId, opts)
+                .then((data) => {
+                    console.log('getAuditsQueryTransactionIdResults success! data:', data);
+                    hideSpinner();
+
+                    $.each(data.entities, async (i, result) => {
+                        showIndividualResult(result);
+                    });
+
+                })
+                .catch((err) => {
+                    if (err.status === 429) {
+                        console.warn('Got 429 (too many requests)');
+                        setTimeout(() => queue.addTask(() => getTransactionResults(transactionId), queue.getNextDelay()), 0);
+                        resolve();
+                        return;
+                    }
+                    console.log('There was a failure calling getAuditsQueryTransactionIdResults');
+                    console.error(err);
+                });
+        }
+
+        async function showIndividualResult(result) {
+            console.log('Adding audit entry:', result);
+            let row = $("<tr/>").appendTo("#resultsBody");
+            $("<td/>", { class: "text-center" }).html(result.eventDate).appendTo(row); // Date
+
+            // User
+            let username = '(none)';
+            try {
+                username = await getUsername(result.user.id)
+            } catch (error) {
+                console.error(error);
+                if (error === 429) {
+                    await until(() => {
+                        setTimeout(() => {
+                            console.log('Waiting...')
+                        }, 60000);
+                    });
+                    console.warn('Trying again (user)...');
+                    await showIndividualResult(result);
+                }
+            }
+            $("<td/>", { class: "text-center" }).html(username).appendTo(row); // User
+
+            $("<td/>", { class: "text-center" }).html(result.client.id).appendTo(row); // Client
+            $("<td/>", { class: "text-center" }).html(result.remoteIp.join('<br/>')).appendTo(row); // Remote IP
+
+            // Action
+            switch (result.action) {
+                case 'MemberAdd':
+                    $("<td/>", { class: "text-center" }).html(`<span class="text-success">${result.action}</span>`).appendTo(row);
+                    break;
+                case 'MemberRemove':
+                    $("<td/>", { class: "text-center" }).html(`<span class="text-danger">${result.action}</span>`).appendTo(row);
+                    break;
+                case 'MemberUpdate':
+                case 'Update':
+                    $("<td/>", { class: "text-center" }).html(`<span class="text-primary">${result.action}</span>`).appendTo(row);
+                    break;
+                default:
+                    $("<td/>", { class: "text-center" }).html(result.action).appendTo(row); // Action
+                    break;
+            }
+
+            // Entity
+            switch (result.entityType) {
+                case 'Queue':
+                    let queue = '(none)';
+                    try {
+                        queue = await getQueueName(result.entity.id)
+                    } catch (error) {
+                        console.error(error);
+                        if (error === 429) {
+                            await until(() => {
+                                setTimeout(() => {
+                                    console.log('Waiting...')
+                                }, 60000);
+                            });
+                            console.warn('Trying again (queue)...');
+                            await showIndividualResult(result);
+                        }
+                    }
+                    $("<td/>", { class: "text-center" }).html(queue + ' (Queue)').appendTo(row);
+                    break;
+                default:
+                    $("<td/>", { class: "text-center" }).html('<span class="text-danger">' + result.entity.id + ' (' + result.entityType + ')' + '</span>').appendTo(row);
+                    break;
+            }
+
+            // Changes
+            let changesColumn = $("<td/>", { class: "text-center" }).html('').appendTo(row);
+            let changes = await processChanges(result.action, result.propertyChanges, changesColumn);
+            changesColumn.append(changes);
+        }
+
+        async function processChanges(action, changes, column) {
+            console.log('Processing changes:', changes);
+            let allChanges = '';
+            return new Promise(async (resolve, reject) => {
+                for await (let change of changes) {
+
+                    // No changes?
+                    if ((change.oldValues.length === 1 && change.oldValues[0].length === 0) && (change.newValues.length === 1 && change.newValues[0].length === 0)) {
+                        allChanges += (allChanges.length > 0 ? '<br/>' : '') + change.property.split(':').pop() + ': (no change)';
+                        continue;
+                    }
+
+                    switch (action) {
+                        case 'MemberAdd':
+                            for await (let user of change.newValues) {
+                                let username = await getUsername(user.split(':')[1]);
+                                allChanges += (allChanges.length > 0 ? '<br/>' : '') + change.property.split(':').pop() + ': ' + '<span class="text-success">' + username + "</span>";
+                            }
+                            break;
+                        case 'MemberRemove':
+                            for await (let user of change.oldValues) {
+                                let username = await getUsername(user.split(':')[1]);
+                                allChanges += (allChanges.length > 0 ? '<br/>' : '') + change.property.split(':').pop() + ': ' + '<span class="text-danger">' + username + "</span>";
+                            }
+                            break;
+                        case 'MemberUpdate':
+                        case 'Update':
+
+                            let property = change.property.split(':').pop();
+
+                            let oldValueText = '';
+                            if (change.oldValues.length === 1 && change.oldValues[0].length === 0) {
+                                oldValueText = '(empty)';
+                            } else {
+                                oldValueText = change.oldValues;
+                            }
+
+                            let newValueText = '';
+                            if (change.newValues.length === 1 && change.newValues[0].length === 0) {
+                                newValueText = '(empty)';
+                            } else {
+                                newValueText = change.newValues;
+                            }
+
+                            allChanges += (allChanges.length > 0 ? '<br/>' : '') + property + ': ' + oldValueText + ' <i class="fas fa-arrow-right"></i> ' + newValueText;
+                            break;
+                        default:
+                            allChanges += (allChanges.length > 0 ? '<br/>' : '') + property + ': ' + JSON.stringify(change);
+                            break;
+                    }
+                    console.log('Adding change:', change);
+                }
+                resolve(allChanges);
+            });
+        }
+
+        async function getUsername(userId) {
+            return new Promise((resolve, reject) => {
+                if (!userId) {
+                    resolve("(none)");
+                }
+
+                // This does not work as all calls happen too fast?
+                if (users[userId] !== undefined) {
+                    resolve(users[userId]);
+                }
+
+                let apiInstance = new platformClient.UsersApi();
+
+                apiInstance.getUser(userId, null)
+                    .then((data) => {
+                        users[userId] = data.name; // Save username to avoid calling the Users API too many times
+                        resolve(data.name);
+                    })
+                    .catch((err) => {
+                        switch (err.status) {
+                            case 429:
+                                reject(429);
+                                return;
+                            case 404:
+                                resolve('(N/A)');
+                                return;
+                            default:
+                                console.log('There was a failure calling getUser');
+                                console.error(err);
+                                showErrorMessage('Error', err);
+                                resolve('(error)');
+                                break;
+                        }
+                    });
+            });
+        }
+
+        async function getQueueName(queueId) {
+            return new Promise((resolve, reject) => {
+                if (!queueId) {
+                    resolve("(none)");
+                }
+
+                // This does not work as all calls happen too fast?
+                if (queues[queueId] !== undefined) {
+                    resolve(queues[queueId]);
+                }
+
+                let apiInstance = new platformClient.RoutingApi();
+
+                apiInstance.getRoutingQueue(queueId)
+                    .then((data) => {
+                        //console.log(`getRoutingQueue success! data: ${JSON.stringify(data, null, 2)}`);
+                        queues[queueId] = data.name;
+                        resolve(data.name);
+                    })
+                    .catch((err) => {
+                        if (err.status === 429) {
+                            reject(429);
+                            return;
+                        }
+                        console.log('There was a failure calling getRoutingQueue');
+                        console.error(err);
+                        resolve('(error)');
+                    });
+            });
+        }
+
+        //#endregion
+
+        //#region Spinner
+
+        function showSpinner() {
+            $("#fadeMe").addClass("fadeMe");
+            $("#fadeMe").show();
+        }
+
+        function hideSpinner(div) {
+            $("#fadeMe").removeClass("fadeMe");
+            $("#fadeMe").hide();
+        }
+
+        //#endregion
+
         //#region Others
+
+        function getHashParameter(parameter) {
+            var hash = window.location.hash.substr(1);
+
+            var result = hash.split('&').reduce(function (result, item) {
+                var parts = item.split('=');
+                result[parts[0]] = parts[1];
+                return result;
+            }, {});
+
+            return result[parameter] || "";
+        }
 
         function resetValues() {
             $("#resultsBody").empty();
