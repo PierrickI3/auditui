@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Audit UI</title>
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <!-- Bootstrap Date Picker -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker3.standalone.min.css">
+
+    <!-- JQuery Toast -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-toast-plugin/1.3.2/jquery.toast.min.css">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/all.min.css">
+
+    <!-- This page's CSS -->
+    <link rel="stylesheet" href="css/index.css">
+
+</head>
+
+<body id="page-top">
+
+    <div id="fadeMe" style="display:none">
+        <div class="spinner"></div>
+        <div class="spinner-text" id="spinner-text"></div>
+    </div>
+
+    <!-- Page Wrapper -->
+    <div id="wrapper">
+
+        <!-- Content Wrapper -->
+        <div id="content-wrapper" class="d-flex flex-column">
+
+            <!-- Main Content -->
+            <div id="content">
+
+                <!-- Begin Page Content -->
+                <div id="printContent" class="container-fluid mt-4">
+
+                    <!-- Page Heading -->
+                    <div class="mb-4">
+                        <h1 id="title" class="h3 mb-0 text-gray-800">Genesys Cloud Audit UI</h1>
+                        <div class="row ml-0 mt-2">
+                            <button class="btn btn-sm btn-primary shadow-sm" data-toggle="modal" data-target="#queryModal"><i class="fas fa-sync-alt fa-sm text-white-50"></i> Query</button>
+                            <button href="#" id="generateReport" class="ml-2 d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i class="fas fa-download fa-sm text-white-50"></i> Print Report</button>
+                        </div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>User</th>
+                                    <th>Client</th>
+                                    <th>Remote IP</th>
+                                    <th>Action</th>
+                                    <th>Entity Type</th>
+                                    <th>Entity</th>
+                                    <th>Changes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsBody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Footer -->
+                    <footer class="sticky-footer bg-white">
+                        <div class="container my-auto">
+                            <div class="copyright text-center my-auto">
+                                <span>Copyright &copy; Genesys 2020</span>
+                            </div>
+                        </div>
+                    </footer>
+
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Query Modal -->
+    <div class="modal fade" id="queryModal" tabindex="-1" role="dialog" aria-labelledby="queryModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="configModalLabel">New Query</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="form-group">
+                            <label for="startDatePicker" class="col-form-label">Start Date:</label>
+                            <input type="text" class="form-control" id="startDatePicker" value="2019-11-01T00:00:00.000Z">
+                        </div>
+                        <div class="form-group">
+                            <label for="endDatePicker" class="col-form-label">End Date:</label>
+                            <input type="text" class="form-control" id="endDatePicker" value="2019-11-07T00:00:00.000Z">
+                        </div>
+                        <div class="form-group">
+                            <label for="environment" class="col-form-label">PureCloud Environment:</label>
+                            <input type="text" class="form-control" id="environment" placeholder="e.g. mypurecloud.ie" value="mypurecloud.ie">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary pull-left" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="getData">Go!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Scroll to Top Button-->
+    <a class="scroll-to-top rounded" href="#page-top">
+        <i class="fas fa-angle-up"></i>
+    </a>
+
+    <!-- #region Imports -->
+
+    <!-- Bootstrap -->
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+
+    <!-- Bootstrap Date Picker -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
+
+    <!-- JQuery Toast -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-toast-plugin/1.3.2/jquery.toast.min.js"></script>
+
+    <!-- Font Awesome -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/js/all.min.js"></script>
+
+    <!-- Genesys Cloud -->
+    <script src="https://sdk-cdn.mypurecloud.com/javascript/66.0.0/purecloud-platform-client-v2.min.js"></script>
+
+    <!-- #endregion -->
+
+    <script>
+
+        const clientId = '1db38a1e-2398-4435-91f6-d51493e17e23';
+        const redirectUri = 'http://127.0.0.1:5500/index.html';
+        const environment = 'mypurecloud.ie';
+        const state = '';
+
+        const platformClient = require('platformClient');
+        const client = platformClient.ApiClient.instance;
+        client.setEnvironment('mypurecloud.ie');
+
+        var queue = new TimerQueue(), users = [], queues = [];
+
+        client.loginImplicitGrant(clientId, redirectUri, { state: state })
+            .then((data) => {
+                console.log(data);
+                showMessage('Connected', 'Click on Query to get started...');
+            })
+            .catch((err) => {
+                console.error(err);
+                showErrorMessage('Error', err);
+            });
+
+        //#region Query
+
+        $("#getData").on("click", async (e) => {
+            e.preventDefault();
+
+            try {
+                console.log('Getting data...');
+
+                let startDate = $("#queryModal #startDatePicker").val();
+                let endDate = $("#queryModal #endDatePicker").val();
+                let environment = $("#queryModal #environment").val();
+
+                if (!startDate || !endDate || !environment) {
+                    alert('Invalid or missing parameters');
+                    return;
+                }
+
+                // Start/End date validation
+                if (new Date(startDate) >= new Date(endDate)) {
+                    alert('Make sure the start date is before the end date');
+                    return;
+                }
+
+                // Close the modal
+                $('#queryModal').modal('toggle');
+
+                // Update date fields
+                var d = new Date(startDate);
+                var startDateString = ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "-" + d.getFullYear();
+                $(".startDate").text(startDateString);
+                var d = new Date(endDate);
+                var endDateString = ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "-" + d.getFullYear();
+                $(".endDate").text(endDateString);
+
+                // Let's go!
+                resetValues();
+                showSpinner();
+                $("#spinner-text").text("Loading... Please Wait...");
+
+                var dateRanges = getDates(new Date(startDate), new Date(endDate));
+                $.each(dateRanges, async (i, dateRange) => {
+                    console.log(`Current date range: ${dateRange.startDate} to ${dateRange.endDate}`);
+                    try {
+                        let transaction = await createAuditQuery(dateRange.startDate, dateRange.endDate, environment);
+                        queue.addTask(() => getTransactionState(transaction.id), 1000);
+                    } catch (error) {
+                        showErrorMessage(`Error for dates ${dateRange.startDate} to ${dateRange.endDate}:`, error);
+                    }
+                });
+
+                await until(() => {
+                    return queue.tasks.length === 0;
+                });
+            } catch (error) {
+                console.error(error);
+                showErrorMessage(error.message);
+            }
+
+        });
+
+        async function createAuditQuery(startDate, endDate, environment) {
+
+            return new Promise((resolve, reject) => {
+                let apiInstance = new platformClient.AuditApi();
+
+                let body = {
+                    interval: `${startDate}/${endDate}`,
+                    serviceName: 'ContactCenter'
+                };
+
+                apiInstance.postAuditsQuery(body)
+                    .then(async (data) => {
+                        console.log('postAuditsQuery success! data:', data);
+                        resolve(data);
+                    })
+                    .catch((err) => {
+                        console.log('There was a failure calling postAuditsQuery');
+                        console.error(err);
+                        reject(err);
+                    });
+            });
+        }
+
+        async function getTransactionState(transactionId) {
+            console.log('Get transaction state:', transactionId);
+            return new Promise((resolve, reject) => {
+                let apiInstance = new platformClient.AuditApi();
+
+                apiInstance.getAuditsQueryTransactionId(transactionId)
+                    .then((data) => {
+                        console.log('getAuditsQueryTransactionId success! data:', data);
+                        if (data.state === 'Succeeded') {
+                            getTransactionResults(transactionId);
+                            resolve();
+                            return;
+                        }
+                        reject(data.state);
+                    })
+                    .catch((err) => {
+                        console.log('There was a failure calling getAuditsQueryTransactionId');
+                        console.error(err);
+                        reject();
+                    });
+            });
+        }
+
+        async function getTransactionResults(transactionId) {
+            let apiInstance = new platformClient.AuditApi();
+
+            let opts = {
+                //'cursor': "",
+                'pageSize': 100
+            };
+
+            apiInstance.getAuditsQueryTransactionIdResults(transactionId, opts)
+                .then((data) => {
+                    console.log('getAuditsQueryTransactionIdResults success! data:', data);
+                    showResults(data);
+                })
+                .catch((err) => {
+                    console.log('There was a failure calling getAuditsQueryTransactionIdResults');
+                    console.error(err);
+                });
+        }
+
+        async function showResults(transactionResults) {
+            console.log('Showing results:', transactionResults);
+            hideSpinner();
+
+            $.each(transactionResults.entities, async (i, result) => {
+                console.log('Adding audit entry:', result);
+                let row = $("<tr/>").appendTo("#resultsBody");
+                $("<td/>", { class: "text-center" }).html(result.eventDate).appendTo(row); // Date
+
+                // User
+                let username = '(none)';
+                try {
+                    username = await getUsername(result.user.id)
+                } catch (error) {
+                }
+                $("<td/>", { class: "text-center" }).html(username).appendTo(row); // User
+
+                $("<td/>", { class: "text-center" }).html(result.client.id).appendTo(row); // Client
+                $("<td/>", { class: "text-center" }).html(result.remoteIp.join('<br/>')).appendTo(row); // Remote IP
+                $("<td/>", { class: "text-center" }).html(result.action).appendTo(row); // Action
+
+                // Entity
+                $("<td/>", { class: "text-center" }).html(result.entityType).appendTo(row); // Entity Type'
+                if (result.entityType === 'Queue') {
+                    let queue = '(none)';
+                    try {
+                        queue = await getQueueName(result.entity.id)
+                    } catch (error) {
+                    }
+                    $("<td/>", { class: "text-center" }).html(queue).appendTo(row);
+                } else {
+                    $("<td/>", { class: "text-center" }).html(result.entity.id).appendTo(row);
+                }
+
+                // Changes
+                let changesColumn = $("<td/>", { class: "text-center" }).html('').appendTo(row);
+                $.each(result.propertyChanges, (j, propertyChange) => {
+                    let changes = '';
+                    if ((propertyChange.oldValues.length === 1 && propertyChange.oldValues[0].length === 0) && (propertyChange.newValues.length === 1 && propertyChange.newValues[0].length === 0)) {
+                        changes = ' (no changes)';
+                    } else {
+                        let oldValues = propertyChange.oldValues;
+                        let oldValueText = '';
+                        if (oldValues.length === 1 && oldValues[0].length === 0) {
+                            oldValueText = '(empty)';
+                        } else {
+                            oldValueText = oldValues;
+                        }
+
+                        let newValues = propertyChange.newValues;
+                        let newValueText = '';
+                        if (newValues.length === 1 && newValues[0].length === 0) {
+                            newValueText = '(empty)';
+                        } else {
+                            newValueText = newValues;
+                        }
+
+                        changes = oldValueText + ' <i class="fas fa-arrow-right"></i> ' + newValueText;
+                    }
+                    changesColumn.append((changesColumn.text().length > 0 ? '<br/>' : '') + propertyChange.property.split(':').pop() + ': ' + changes);
+                });
+            });
+        }
+
+        async function getUsername(userId) {
+            return new Promise((resolve, reject) => {
+                if (!userId) {
+                    resolve("(none)");
+                }
+
+                // This does not work as all calls happen too fast?
+                if (users[userId] !== undefined) {
+                    resolve(users[userId]);
+                }
+
+                let apiInstance = new platformClient.UsersApi();
+
+                apiInstance.getUser(userId, null)
+                    .then((data) => {
+                        users[userId] = data.name; // Save username to avoid calling the Users API too many times
+                        resolve(data.name);
+                    })
+                    .catch((err) => {
+                        console.log('There was a failure calling getUser');
+                        console.error(err);
+                        showErrorMessage('Error', err);
+                        resolve('(error)');
+                    });
+            });
+        }
+
+        async function getQueueName(queueId) {
+            return new Promise((resolve, reject) => {
+                if (!queueId) {
+                    resolve("(none)");
+                }
+
+                // This does not work as all calls happen too fast?
+                if (queues[queueId] !== undefined) {
+                    resolve(queues[queueId]);
+                }
+
+                let apiInstance = new platformClient.RoutingApi();
+
+                apiInstance.getRoutingQueue(queueId)
+                    .then((data) => {
+                        //console.log(`getRoutingQueue success! data: ${JSON.stringify(data, null, 2)}`);
+                        queues[queueId] = data.name;
+                        resolve(data.name);
+                    })
+                    .catch((err) => {
+                        console.log('There was a failure calling getRoutingQueue');
+                        console.error(err);
+                        resolve('(error)');
+                    });
+            });
+        }
+
+        //#endregion
+
+        //#region Spinner
+
+        function showSpinner() {
+            $("#fadeMe").addClass("fadeMe");
+            $("#fadeMe").show();
+        }
+
+        function hideSpinner(div) {
+            $("#fadeMe").removeClass("fadeMe");
+            $("#fadeMe").hide();
+        }
+
+        //#endregion
+
+        //#region Date Pickers & Date Functions
+
+        $("#startDatePicker").datepicker({
+            format: "yyyy-mm-ddT00:00:00.000Z",
+            endDate: "+0d",       // No future dates
+            autoclose: true,      // Close after selecting date
+            weekStart: 1          // weeks start on Mondays
+        });
+
+        $("#endDatePicker").datepicker({
+            format: "yyyy-mm-ddT00:00:00.000Z",
+            endDate: "+0d",       // No future dates
+            autoclose: true,      // Close after selecting date
+            weekStart: 1          // weeks start on Mondays
+        });
+
+        Date.prototype.addDays = function (days) {
+            var date = new Date(this.valueOf());
+            date.setDate(date.getDate() + days);
+            return date;
+        }
+
+        function getDates(startDate, stopDate) {
+            var dateArray = [];
+            var currentDate = startDate;
+            while (currentDate < stopDate) {
+                var dateRange = {};
+                dateRange.startDate = new Date(currentDate).toISOString();
+                currentDate = currentDate.addDays(7);
+                if (currentDate > stopDate) {
+                    currentDate = stopDate;
+                }
+                dateRange.endDate = new Date(currentDate).toISOString();
+                dateArray.push(dateRange);
+            }
+            return dateArray;
+        }
+
+        //#endregion
+
+        //#region Print
+
+        $("#generateReport").on("click", () => {
+            window.print();
+        });
+
+        //#endregion
+
+        //#region Queue Functions
+
+        function TimerQueue() {
+            this.currentTimer = null;
+            this.tasks = [];
+        }
+
+        TimerQueue.prototype.addTask = function (callback, delay) {
+            this.tasks.push({ callback: callback, delay: delay });
+
+            // If there's a scheduled task, bail out.
+            if (this.currentTimer) return;
+
+            // Otherwise, start kicking tires
+            this.launchNextTask();
+        };
+
+        TimerQueue.prototype.launchNextTask = function () {
+
+            // If there's a scheduled task, bail out.
+            if (this.currentTimer) return;
+
+            var self = this;
+            //var nextTask = this.tasks.shift();
+            var nextTask = (this.tasks.length > 0 ? this.tasks[0] : undefined);
+
+            // There's no more tasks, clean up.
+            if (!nextTask) return this.clear();
+
+            // Otherwise, schedule the next task.
+            this.currentTimer = setTimeout(async function () {
+                console.log('next task:', nextTask.callback);
+                try {
+                    await nextTask.callback();
+                } catch (error) {
+                    console.warn(`${nextTask.callback}: ${error}`);
+                    self.addTask(() => nextTask.callback(), 1000);
+                }
+                console.log('End of call for next task:', nextTask);
+                if (self.tasks.length > 0) self.tasks.shift(); // Remove task from list
+                self.currentTimer = null;
+
+                // Call this function again to set up the next task.
+                self.launchNextTask();
+            }, nextTask.delay);
+        };
+
+        TimerQueue.prototype.clear = function () {
+            if (this.currentTimer) clearTimeout(this.currentTimer);
+
+            // Timer clears only destroy the timer. It doesn't null references.
+            this.currentTimer = null;
+
+            // Fast way to clear the task queue
+            this.tasks.length = 0;
+        };
+
+        TimerQueue.prototype.getNextDelay = function () {
+            console.log(`Getting next delay: Tasks length: ${this.tasks.length}, Last task: ${JSON.stringify(this.tasks[this.tasks.length - 1])}`);
+            let longTasks = this.tasks.filter(t => t.delay > 30000);
+            if (longTasks && longTasks.length > 0) {
+                return 1000;
+            }
+            return 60000;
+        }
+
+        //#endregion
+
+        //#region Wait
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function until(fn) {
+            while (!fn()) {
+                console.log('Waiting...');
+                $("#spinner-text").text('Waiting...');
+                await sleep(1000);
+            }
+        }
+
+        //#endregion
+
+        //#region Others
+
+        function resetValues() {
+            $("#resultsBody").empty();
+        }
+
+        // Scroll to top button appear
+        $(document).on('scroll', function () {
+            var scrollDistance = $(this).scrollTop();
+            if (scrollDistance > 100) {
+                $('.scroll-to-top').fadeIn();
+            } else {
+                $('.scroll-to-top').fadeOut();
+            }
+        });
+
+        function showMessage(heading, message) {
+            $.toast({
+                heading: heading
+                , text: message
+                , position: 'top-right'
+                , loaderBg: '#ff6849'
+                , icon: 'info'
+                , hideAfter: 3500
+                , stack: 6
+            })
+        }
+
+        function showErrorMessage(heading, message) {
+            $.toast({
+                heading: heading
+                , text: message
+                , position: 'top-right'
+                , loaderBg: '#ff0000'
+                , icon: 'error'
+                , hideAfter: 10000
+                , stack: 6
+            })
+        }
+
+        //#endregion
+
+    </script>
+</body>
+
+</html>
